@@ -1,0 +1,54 @@
+# Gera o APK no GitHub, sem instalar nada no computador.
+# Suba a pasta braco-robotico como raiz do repositório, abra a aba Actions,
+# espere o "Build APK" terminar e baixe o arquivo em "Artifacts".
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Gerar pasta android/
+        run: flutter create --platforms=android --project-name braco_robotico .
+
+      - name: Adicionar permissões de Bluetooth
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          if ! grep -q BLUETOOTH_SCAN "$MANIFEST"; then
+            python3 - "$MANIFEST" android-permissoes.xml <<'EOF'
+          import re, sys
+          manifest, perms = sys.argv[1], sys.argv[2]
+          bloco = re.sub(r'<!--.*?-->', '', open(perms).read(), flags=re.S).strip()
+          s = open(manifest).read()
+          s = s.replace('<application', bloco + '\n\n    <application', 1)
+          open(manifest, 'w').write(s)
+          EOF
+          fi
+          cat "$MANIFEST"
+
+      - run: flutter pub get
+
+      - run: flutter build apk --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: braco-robotico-apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk
