@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:async';git 
 import 'dart:convert';
 import 'dart:ui' show FontFeature;
 
@@ -59,8 +59,13 @@ class _TelaConexaoState extends State<TelaConexao> {
     super.initState();
     _subResultados = FlutterBluePlus.scanResults.listen((r) {
       // Mostra só dispositivos com nome; os que anunciam FFE0 vão para o topo.
-      final lista = r.where((e) => e.device.platformName.isNotEmpty).toList()
-        ..sort((a, b) => (_ehHc08(b) ? 1 : 0) - (_ehHc08(a) ? 1 : 0));
+      // Mostra TODOS (alguns HC-08 não anunciam nome). Os que parecem o módulo
+      // vão para o topo; o resto é ordenado pelo sinal (mais perto primeiro).
+      final lista = r.toList()
+        ..sort((a, b) {
+          final h = (_ehHc08(b) ? 1 : 0) - (_ehHc08(a) ? 1 : 0);
+          return h != 0 ? h : b.rssi.compareTo(a.rssi);
+        });
       setState(() => _resultados = lista);
     });
     _subScan = FlutterBluePlus.isScanning.listen((s) => setState(() => _procurando = s));
@@ -69,7 +74,14 @@ class _TelaConexaoState extends State<TelaConexao> {
 
   bool _ehHc08(ScanResult r) =>
       r.advertisementData.serviceUuids.contains(kServico) ||
-      r.device.platformName.toUpperCase().contains('HC-08');
+      ['HC-08', 'HC08', 'BT05', 'BT-05', 'HMSOFT', 'JDY', 'CC41']
+          .any((n) => _nome(r).toUpperCase().contains(n));
+
+  String _nome(ScanResult r) {
+    if (r.advertisementData.advName.isNotEmpty) return r.advertisementData.advName;
+    if (r.device.platformName.isNotEmpty) return r.device.platformName;
+    return 'Sem nome';
+  }
 
   Future<void> _procurar() async {
     try {
@@ -155,7 +167,7 @@ class _TelaConexaoState extends State<TelaConexao> {
                       return ListTile(
                         leading: Icon(hc ? Icons.precision_manufacturing : Icons.bluetooth,
                             color: hc ? Theme.of(context).colorScheme.primary : null),
-                        title: Text(r.device.platformName),
+                        title: Text(_nome(r)),
                         subtitle: Text('${r.device.remoteId.str} · ${r.rssi} dBm'),
                         trailing: conectando
                             ? const SizedBox(
@@ -265,7 +277,7 @@ class _TelaControleState extends State<TelaControle> {
     final cores = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.dispositivo.platformName),
+        title: Text(widget.dispositivo.platformName.isEmpty ? 'Braço robótico' : widget.dispositivo.platformName),
         actions: [
           IconButton(
             tooltip: 'Posição inicial',
